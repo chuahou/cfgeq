@@ -1,0 +1,39 @@
+cabal-version: 1.18
+
+-- This file has been generated from package.yaml by hpack version 0.34.4.
+--
+-- see: https://github.com/sol/hpack
+
+name:           cfgeq
+version:        0.1.0.0
+synopsis:       Unsound checker for CFG equality
+description:    A library for writing CFGs using a DSL that can be checked for equality on strings generated up to a specified length. Inefficient and unsound as it cannot differentiate CFGs that generate different strings of longer length.
+category:       Validation
+homepage:       https://github.com/chuahou/cfgeq#readme
+bug-reports:    https://github.com/chuahou/cfgeq/issues
+maintainer:     Chua Hou <human+github@chuahou.dev>
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+extra-doc-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/chuahou/cfgeq
+
+library
+  exposed-modules:
+      CFGEq.CFG
+  other-modules:
+      Paths_cfgeq
+  hs-source-dirs:
+      src
+  default-extensions:
+      LambdaCase
+      TupleSections
+  ghc-options: -Wall -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -static
+  build-depends:
+      base >=4.13 && <5
+  default-language: Haskell2010
