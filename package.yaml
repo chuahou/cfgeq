@@ -1,0 +1,30 @@
+name:        cfgeq
+version:     0.1.0.0
+synopsis:    Unsound checker for CFG equality
+description: A library for writing CFGs using a DSL that can be checked for
+             equality on strings generated up to a specified length. Inefficient
+             and unsound as it cannot differentiate CFGs that generate different
+             strings of longer length.
+category:    Validation
+github:      chuahou/cfgeq
+maintainer:  Chua Hou <human+github@chuahou.dev>
+
+ghc-options:
+    - -Wall
+    - -fwarn-incomplete-uni-patterns
+    - -fwarn-incomplete-record-updates
+    - -static
+
+default-extensions:
+    - LambdaCase
+    - TupleSections
+
+dependencies:
+    - base >= 4.13 && < 5
+
+library:
+    source-dirs: src
+
+extra-doc-files:
+    - README.md
+    - CHANGELOG.md
