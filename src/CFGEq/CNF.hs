@@ -54,7 +54,7 @@ compile :: forall v t. (Ord v, Ord t)
         => (Int -> v) -- ^ Fresh variable supplier.
         -> CFG v t    -- ^ Grammar to compile.
         -> CNF v t
-compile mkFresh (CFG rs s) = CNF rules' newS False
+compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
     where
         -- States here are used to call @mkFresh@ with fresh 'Int's every time
         -- we need a fresh variable, keeping track of the largest number we've
@@ -133,9 +133,14 @@ compile mkFresh (CFG rs s) = CNF rules' newS False
         toCNF _                          = error "toCNF internal error"
 
         -- Putting them all together.
-        (newS, rules') = fst . flip runState 0 $ do
+        (newS, rules', sEmpty) = fst . flip runState 0 $ do
             (s', startRule) <- startStep s
-            binRules <- Set.unions <$> mapM bin (Set.toList (startRule <: rs))
+            binRules        <- Set.unions <$> mapM bin (Set.toList (startRule <: rs))
             let delUnitRules = unit . del s' [] $ binRules
-            termRules <- Set.unions <$> mapM term (Set.toList delUnitRules)
-            pure (s', Map.fromListWith (<>) . map toCNF . Set.toList $ termRules)
+            termRules       <- Set.unions <$> mapM term (Set.toList delUnitRules)
+            let sEmpty'      = Set.member (s' :-> []) termRules
+            let noEmptyRules = Set.delete (s' :-> []) termRules
+            pure ( s'
+                 , Map.fromListWith (<>) . map toCNF . Set.toList $ noEmptyRules
+                 , sEmpty'
+                 )
