@@ -16,12 +16,17 @@
 
 module CFGEq.CFG where
 
-import           Data.List.NonEmpty (NonEmpty (..))
+import           Data.Set (Set)
+import qualified Data.Set as Set
 
 -- | @CFG v t@ is the type of context-free grammars with variables of type @v@
--- and terminals of type @t@. Each such grammar is a 4-tuple of the list of
--- variables, list of terminals, list of 'Rule's and the start symbol.
-type CFG v t = ([v], [t], [Rule v t], v)
+-- and terminals of type @t@. Each such grammar contains the set of 'Rule's
+-- and the start symbol. The list of terminals and non-terminals does not need
+-- to be explicitly stated for our purposes.
+data CFG v t = CFG { rules :: Set (Rule v t) -- ^ Set of rules in the CFG.
+                   , start :: v              -- ^ The start symbol.
+                   }
+    deriving Show
 
 -- | @Rule v t@ is a CFG rule with variables of type @v@ and terminals of type
 -- @t@. Variables with more than one rule should have multiple @Rule@s, for
@@ -29,18 +34,27 @@ type CFG v t = ([v], [t], [Rule v t], v)
 -- B], S :-> []]@.
 data Rule v t =
     -- | @S :-> s@ is the rule generating the string given by the list @s@ from
-    -- the variable @S@. The string is a list of 'Either's, with 'Left's
-    -- representing variables and 'Right's representing terminals.
-    v :-> [Either v t]
+    -- the variable @S@.
+    v :-> Production v t
     deriving (Show, Eq, Ord)
 
--- | Acts similarly to \(\mid\) in normal CFGs, adding a new rule to a
--- 'NonEmpty' list of existing rules. For example, \(S \to AB \mid c\) would be
--- written @S .-> [Left A, Left B] .| [Right \'c']@.
-(.|) :: NonEmpty (Rule v t) -> [Either v t] -> NonEmpty (Rule v t)
-(s :-> w :| rs) .| w' = s :-> w :| s :-> w' : rs
+-- | The type of productions in a 'Rule'. The string is a list of 'Either's,
+-- with 'Left's representing variables and 'Right's representing terminals.
+type Production v t = [Either v t]
 
--- | Creates a single rule as a 'NonEmpty' list, allowing for use with '.|' to
--- write multiple rules with the same terminal.
-(.->) :: v -> [Either v t] -> NonEmpty (Rule v t)
-s .-> w = s :-> w :| []
+-- | Acts like \(\to\) in normal CFGs for use with '.|' and '.>'. To write
+-- \(S \to AB \mid \epsilon\), for example, write
+--
+-- > S .-> [Left A, Left B] .| [] .>
+(.->) :: (Ord v, Ord t) => v -> Set (Production v t) -> Set (Rule v t)
+(.->) s = Set.map (s :->)
+
+-- | Acts like \(\mid\) in normal CFGs for use with '.->' and '.>'.
+(.|) :: (Ord v, Ord t)
+     => Production v t -> Set (Production v t) -> Set (Production v t)
+(.|) = Set.insert
+
+-- | Terminates a list of alternatives using '.->' and '.|'. Necessary so that
+-- such expressions are well typed.
+(.>) :: (Ord v, Ord t) => Production v t -> Set (Production v t)
+(.>) = Set.singleton
