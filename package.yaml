@@ -20,7 +20,9 @@ default-extensions:
     - TupleSections
 
 dependencies:
-    - base >= 4.13 && < 5
+    - base        >= 4.13 && < 5
+    - containers ^>= 0.6.2.1
+    - mtl        ^>= 2.2.2
 
 library:
     source-dirs: src
