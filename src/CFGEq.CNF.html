@@ -1,0 +1,564 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">-- SPDX-License-Identifier: MIT</span><span>
+</span><span id="line-2"></span><span class="hs-comment">-- Copyright (c) 2021 Chua Hou</span><span>
+</span><span id="line-3"></span><span>
+</span><span id="line-4"></span><span class="hs-comment">-----------------------------------------------------------------------------</span><span>
+</span><span id="line-5"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-6"></span><span class="hs-comment">-- Module      : CFGEq.CNF</span><span>
+</span><span id="line-7"></span><span class="hs-comment">-- Copyright   : Chua Hou 2021</span><span>
+</span><span id="line-8"></span><span class="hs-comment">-- License     : MIT</span><span>
+</span><span id="line-9"></span><span class="hs-comment">--</span><span>
+</span><span id="line-10"></span><span class="hs-comment">-- Maintainer  : Chua Hou &lt;human+github@chuahou.dev&gt;</span><span>
+</span><span id="line-11"></span><span class="hs-comment">-- Stability   : experimental</span><span>
+</span><span id="line-12"></span><span class="hs-comment">-- Portability : non-portable</span><span>
+</span><span id="line-13"></span><span class="hs-comment">--</span><span>
+</span><span id="line-14"></span><span class="hs-comment">-- Compilation of CFGs from 'CFGEq.CFG' to Chomsky normal form.</span><span>
+</span><span id="line-15"></span><span class="hs-comment">-----------------------------------------------------------------------------</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-pragma">{-# LANGUAGE OverloadedLists     #-}</span><span>
+</span><span id="line-18"></span><span class="hs-pragma">{-# LANGUAGE ScopedTypeVariables #-}</span><span>
+</span><span id="line-19"></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">CFGEq.CNF</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="CFGEq.CNF.html#CNF"><span class="hs-identifier">CNF</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span>                 </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="CFGEq.CNF.html#CNFProduction"><span class="hs-identifier">CNFProduction</span></a></span><span>
+</span><span id="line-22"></span><span>                 </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="CFGEq.CNF.html#compile"><span class="hs-identifier">compile</span></a></span><span>
+</span><span id="line-23"></span><span>                 </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier">Control.Monad.State</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier">State</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier">get</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier">put</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier">runState</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Data.Map</span></a></span><span>            </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Map</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Data.Map</span></a></span><span>            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Map</span></span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Data.Set</span></a></span><span>            </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Set</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier">Data.Set</span></a></span><span>            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Set</span></span><span>
+</span><span id="line-30"></span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="CFGEq.CFG.html"><span class="hs-identifier">CFGEq.CFG</span></a></span><span>
+</span><span id="line-32"></span><span>
+</span><span id="line-33"></span><span class="hs-comment">-- | @CNF v t@ is the type of Chomsky normal form grammars with variables of</span><span>
+</span><span id="line-34"></span><span class="hs-comment">-- type @v@ and terminals of type @t@.</span><span>
+</span><span id="line-35"></span><span class="hs-keyword">data</span><span> </span><span id="CNF"><span class="annot"><a href="CFGEq.CNF.html#CNF"><span class="hs-identifier hs-var">CNF</span></a></span></span><span> </span><span id="local-6989586621679036408"><span class="annot"><a href="#local-6989586621679036408"><span class="hs-identifier hs-type">v</span></a></span></span><span> </span><span id="local-6989586621679036407"><span class="annot"><a href="#local-6989586621679036407"><span class="hs-identifier hs-type">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="CNF"><span class="annot"><a href="CFGEq.CNF.html#CNF"><span class="hs-identifier hs-var">CNF</span></a></span></span><span> </span><span class="hs-special">{</span><span> </span><span id="rulesCNF"><span class="annot"><span class="annottext">CNF v t -&gt; Map v (Set (CNFProduction v t))
+</span><a href="CFGEq.CNF.html#rulesCNF"><span class="hs-identifier hs-var hs-var">rulesCNF</span></a></span></span><span>      </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Map</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036408"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CNF.html#CNFProduction"><span class="hs-identifier hs-type">CNFProduction</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036408"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036407"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span>                                           </span><span class="hs-comment">-- ^ Map of variables to their set of rules.</span><span>
+</span><span id="line-37"></span><span>                   </span><span class="hs-special">,</span><span> </span><span id="startCNF"><span class="annot"><span class="annottext">CNF v t -&gt; v
+</span><a href="CFGEq.CNF.html#startCNF"><span class="hs-identifier hs-var hs-var">startCNF</span></a></span></span><span>      </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679036408"><span class="hs-identifier hs-type">v</span></a></span><span>    </span><span class="hs-comment">-- ^ The start symbol.</span><span>
+</span><span id="line-38"></span><span>                   </span><span class="hs-special">,</span><span> </span><span id="producesEmpty"><span class="annot"><span class="annottext">CNF v t -&gt; Bool
+</span><a href="CFGEq.CNF.html#producesEmpty"><span class="hs-identifier hs-var hs-var">producesEmpty</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Bool</span></a></span><span> </span><span class="hs-comment">-- ^ Whether the start symbol produces epsilon.</span><span>
+</span><span id="line-39"></span><span>                   </span><span class="hs-special">}</span><span>
+</span><span id="line-40"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span id="local-6989586621679036330"><span id="local-6989586621679036332"><span id="local-6989586621679036334"><span class="annot"><span class="annottext">Int -&gt; CNF v t -&gt; ShowS
+[CNF v t] -&gt; ShowS
+CNF v t -&gt; String
+(Int -&gt; CNF v t -&gt; ShowS)
+-&gt; (CNF v t -&gt; String) -&gt; ([CNF v t] -&gt; ShowS) -&gt; Show (CNF v t)
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+forall v t. (Show v, Show t) =&gt; Int -&gt; CNF v t -&gt; ShowS
+forall v t. (Show v, Show t) =&gt; [CNF v t] -&gt; ShowS
+forall v t. (Show v, Show t) =&gt; CNF v t -&gt; String
+showList :: [CNF v t] -&gt; ShowS
+$cshowList :: forall v t. (Show v, Show t) =&gt; [CNF v t] -&gt; ShowS
+show :: CNF v t -&gt; String
+$cshow :: forall v t. (Show v, Show t) =&gt; CNF v t -&gt; String
+showsPrec :: Int -&gt; CNF v t -&gt; ShowS
+$cshowsPrec :: forall v t. (Show v, Show t) =&gt; Int -&gt; CNF v t -&gt; ShowS
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></a></span></span></span></span><span>
+</span><span id="line-41"></span><span>
+</span><span id="line-42"></span><span class="hs-comment">-- | The type of productions in a rule for 'CNF'. Does not allow epsilon</span><span>
+</span><span id="line-43"></span><span class="hs-comment">-- productions since 'CNF' captures that for the start symbol as a 'Bool'.</span><span>
+</span><span id="line-44"></span><span class="hs-keyword">type</span><span> </span><span id="CNFProduction"><span class="annot"><a href="CFGEq.CNF.html#CNFProduction"><span class="hs-identifier hs-var">CNFProduction</span></a></span></span><span> </span><span id="local-6989586621679036328"><span class="annot"><a href="#local-6989586621679036328"><span class="hs-identifier hs-type">v</span></a></span></span><span> </span><span id="local-6989586621679036327"><span class="annot"><a href="#local-6989586621679036327"><span class="hs-identifier hs-type">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Either</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679036328"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679036328"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679036327"><span class="hs-identifier hs-type">t</span></a></span><span>
+</span><span id="line-45"></span><span>
+</span><span id="line-46"></span><span class="hs-comment">-- | Cons operator for 'Set's for convenience.</span><span>
+</span><span id="line-47"></span><span id="local-6989586621679036326"><span class="annot"><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-type">(&lt;:)</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Ord</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036326"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679036326"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036326"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036326"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-48"></span><span id="%3C%3A"><span class="annot"><span class="annottext">&lt;: :: a -&gt; Set a -&gt; Set a
+</span><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-var hs-var">(&lt;:)</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Set a -&gt; Set a
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.insert</span></a></span><span>
+</span><span id="line-49"></span><span>
+</span><span id="line-50"></span><span class="hs-comment">-- | Compiles a 'CFG' to 'CNF'. Requires the caller to supply a function that</span><span>
+</span><span id="line-51"></span><span class="hs-comment">-- supplies fresh variables of the correct type, that should be guaranteed to</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- return a different variable when given a different 'Int' argument.</span><span>
+</span><span id="line-53"></span><span class="annot"><a href="CFGEq.CNF.html#compile"><span class="hs-identifier hs-type">compile</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679036323"><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span></span><span> </span><span id="local-6989586621679036322"><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Ord</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Ord</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-54"></span><span>        </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Int</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ^ Fresh variable supplier.</span><span>
+</span><span id="line-55"></span><span>        </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#CFG"><span class="hs-identifier hs-type">CFG</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span>    </span><span class="hs-comment">-- ^ Grammar to compile.</span><span>
+</span><span id="line-56"></span><span>        </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="CFGEq.CNF.html#CNF"><span class="hs-identifier hs-type">CNF</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span>
+</span><span id="line-57"></span><span id="compile"><span class="annot"><span class="annottext">compile :: (Int -&gt; v) -&gt; CFG v t -&gt; CNF v t
+</span><a href="CFGEq.CNF.html#compile"><span class="hs-identifier hs-var hs-var">compile</span></a></span></span><span> </span><span id="local-6989586621679036321"><span class="annot"><span class="annottext">Int -&gt; v
+</span><a href="#local-6989586621679036321"><span class="hs-identifier hs-var">mkFresh</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#CFG"><span class="hs-identifier hs-type">CFG</span></a></span><span> </span><span id="local-6989586621679036319"><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036319"><span class="hs-identifier hs-var">rs</span></a></span></span><span> </span><span id="local-6989586621679036318"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036318"><span class="hs-identifier hs-var">s</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map v (Set (CNFProduction v t)) -&gt; v -&gt; Bool -&gt; CNF v t
+forall v t. Map v (Set (CNFProduction v t)) -&gt; v -&gt; Bool -&gt; CNF v t
+</span><a href="CFGEq.CNF.html#CNF"><span class="hs-identifier hs-var">CNF</span></a></span><span> </span><span class="annot"><span class="annottext">Map v (Set (CNFProduction v t))
+</span><a href="#local-6989586621679036317"><span class="hs-identifier hs-var">rules'</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036316"><span class="hs-identifier hs-var">newS</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679036315"><span class="hs-identifier hs-var">sEmpty</span></a></span><span>
+</span><span id="line-58"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-59"></span><span>        </span><span class="hs-comment">-- States here are used to call @mkFresh@ with fresh 'Int's every time</span><span>
+</span><span id="line-60"></span><span>        </span><span class="hs-comment">-- we need a fresh variable, keeping track of the largest number we've</span><span>
+</span><span id="line-61"></span><span>        </span><span class="hs-comment">-- used so far.</span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span>        </span><span class="hs-comment">-- START step</span><span>
+</span><span id="line-64"></span><span>        </span><span class="hs-comment">-- Generates a rule with a new start symbol that produces the old start</span><span>
+</span><span id="line-65"></span><span>        </span><span class="hs-comment">-- symbol @oldS@.</span><span>
+</span><span id="line-66"></span><span>        </span><span class="annot"><a href="#local-6989586621679036314"><span class="hs-identifier hs-type">startStep</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier hs-type">State</span></a></span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Int</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-67"></span><span>        </span><span id="local-6989586621679036314"><span class="annot"><span class="annottext">startStep :: v -&gt; State Int (v, Rule v t)
+</span><a href="#local-6989586621679036314"><span class="hs-identifier hs-var hs-var">startStep</span></a></span></span><span> </span><span id="local-6989586621679036313"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036313"><span class="hs-identifier hs-var">oldS</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT Int Identity Int
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier hs-var">get</span></a></span><span> </span><span class="annot"><span class="annottext">StateT Int Identity Int
+-&gt; (Int -&gt; State Int (v, Rule v t)) -&gt; State Int (v, Rule v t)
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">&gt;&gt;=</span></a></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679036312"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036312"><span class="hs-identifier hs-var">gen</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Int -&gt; StateT Int Identity ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier hs-var">put</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">succ</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036312"><span class="hs-identifier hs-var">gen</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StateT Int Identity ()
+-&gt; State Int (v, Rule v t) -&gt; State Int (v, Rule v t)
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; m b -&gt; m b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">&gt;&gt;</span></a></span><span> </span><span class="annot"><span class="annottext">(v, Rule v t) -&gt; State Int (v, Rule v t)
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">pure</span></a></span><span>
+</span><span id="line-68"></span><span>            </span><span class="hs-special">(</span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679036310"><span class="annot"><span class="annottext">s' :: v
+</span><a href="#local-6989586621679036310"><span class="hs-identifier hs-var hs-var">s'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; v
+</span><a href="#local-6989586621679036321"><span class="hs-identifier hs-var">mkFresh</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036312"><span class="hs-identifier hs-var">gen</span></a></span><span>
+</span><span id="line-69"></span><span>              </span><span class="hs-keyword">in</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036310"><span class="hs-identifier hs-var">s'</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036310"><span class="hs-identifier hs-var">s'</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">v -&gt; Either v t
+forall a b. a -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Left</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036313"><span class="hs-identifier hs-var">oldS</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-70"></span><span>
+</span><span id="line-71"></span><span>        </span><span class="hs-comment">-- BIN step</span><span>
+</span><span id="line-72"></span><span>        </span><span class="hs-comment">-- Converts given rule to a list of equivalent rules each with &lt;= 2</span><span>
+</span><span id="line-73"></span><span>        </span><span class="hs-comment">-- variables on the right hand side.</span><span>
+</span><span id="line-74"></span><span>        </span><span class="annot"><a href="#local-6989586621679036308"><span class="hs-identifier hs-type">bin</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier hs-type">State</span></a></span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Int</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-75"></span><span>        </span><span id="local-6989586621679036308"><span class="annot"><span class="annottext">bin :: Rule v t -&gt; State Int (Set (Rule v t))
+</span><a href="#local-6989586621679036308"><span class="hs-identifier hs-var hs-var">bin</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036307"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036307"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036306"><span class="annot"><span class="annottext">Either v t
+</span><a href="#local-6989586621679036306"><span class="hs-identifier hs-var">a</span></a></span></span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-type">:</span></a></span><span id="local-6989586621679036305"><span class="annot"><span class="annottext">Either v t
+</span><a href="#local-6989586621679036305"><span class="hs-identifier hs-var">b</span></a></span></span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-type">:</span></a></span><span id="local-6989586621679036304"><span class="annot"><span class="annottext">Either v t
+</span><a href="#local-6989586621679036304"><span class="hs-identifier hs-var">c</span></a></span></span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-type">:</span></a></span><span id="local-6989586621679036303"><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036303"><span class="hs-identifier hs-var">cs</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-76"></span><span>            </span><span id="local-6989586621679036302"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036302"><span class="hs-identifier hs-var">gen</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">StateT Int Identity Int
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier hs-var">get</span></a></span><span>
+</span><span id="line-77"></span><span>            </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679036301"><span class="annot"><span class="annottext">f :: v
+</span><a href="#local-6989586621679036301"><span class="hs-identifier hs-var hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; v
+</span><a href="#local-6989586621679036321"><span class="hs-identifier hs-var">mkFresh</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036302"><span class="hs-identifier hs-var">gen</span></a></span><span>
+</span><span id="line-78"></span><span>            </span><span class="annot"><span class="annottext">Int -&gt; StateT Int Identity ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/mtl-2.2.2/src"><span class="hs-identifier hs-var">put</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; StateT Int Identity ())
+-&gt; (Int -&gt; Int) -&gt; Int -&gt; StateT Int Identity ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">succ</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; StateT Int Identity ()) -&gt; Int -&gt; StateT Int Identity ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679036302"><span class="hs-identifier hs-var">gen</span></a></span><span>
+</span><span id="line-79"></span><span>            </span><span id="local-6989586621679036299"><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036299"><span class="hs-identifier hs-var">recurse</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; State Int (Set (Rule v t))
+</span><a href="#local-6989586621679036308"><span class="hs-identifier hs-var">bin</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036301"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either v t
+</span><a href="#local-6989586621679036305"><span class="hs-identifier hs-var">b</span></a></span><span class="annot"><span class="annottext">Either v t -&gt; Production v t -&gt; Production v t
+forall a. a -&gt; [a] -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-var">:</span></a></span><span class="annot"><span class="annottext">Either v t
+</span><a href="#local-6989586621679036304"><span class="hs-identifier hs-var">c</span></a></span><span class="annot"><span class="annottext">Either v t -&gt; Production v t -&gt; Production v t
+forall a. a -&gt; [a] -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-var">:</span></a></span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036303"><span class="hs-identifier hs-var">cs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-80"></span><span>            </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; State Int (Set (Rule v t))
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">pure</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; State Int (Set (Rule v t)))
+-&gt; Set (Rule v t) -&gt; State Int (Set (Rule v t))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036307"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Either v t
+Item (Production v t)
+</span><a href="#local-6989586621679036306"><span class="hs-identifier hs-var">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">v -&gt; Either v t
+forall a b. a -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Left</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036301"><span class="hs-identifier hs-var">f</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-var">&lt;:</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036299"><span class="hs-identifier hs-var">recurse</span></a></span><span>
+</span><span id="line-81"></span><span>        </span><span class="annot"><a href="#local-6989586621679036308"><span class="hs-identifier hs-var">bin</span></a></span><span> </span><span id="local-6989586621679036298"><span class="annot"><span class="annottext">Rule v t
+</span><a href="#local-6989586621679036298"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; State Int (Set (Rule v t))
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">pure</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Item (Set (Rule v t))
+Rule v t
+</span><a href="#local-6989586621679036298"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-82"></span><span>
+</span><span id="line-83"></span><span>        </span><span class="hs-comment">-- DEL step</span><span>
+</span><span id="line-84"></span><span>        </span><span class="hs-comment">-- Eliminates nullable rules, giving the new list of rules, given the</span><span>
+</span><span id="line-85"></span><span>        </span><span class="hs-comment">-- start symbol and list of already removed rules. At each iteration it</span><span>
+</span><span id="line-86"></span><span>        </span><span class="hs-comment">-- finds a rule \(A \to \epsilon\), removes it, and changes every other</span><span>
+</span><span id="line-87"></span><span>        </span><span class="hs-comment">-- rule containing \(A\) on the RHS.</span><span>
+</span><span id="line-88"></span><span>        </span><span class="annot"><a href="#local-6989586621679036297"><span class="hs-identifier hs-type">del</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-89"></span><span>        </span><span id="local-6989586621679036297"><span class="annot"><span class="annottext">del :: v -&gt; Set v -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036297"><span class="hs-identifier hs-var hs-var">del</span></a></span></span><span> </span><span id="local-6989586621679036296"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036296"><span class="hs-identifier hs-var">s'</span></a></span></span><span> </span><span id="local-6989586621679036295"><span class="annot"><span class="annottext">Set v
+</span><a href="#local-6989586621679036295"><span class="hs-identifier hs-var">removed</span></a></span></span><span> </span><span id="local-6989586621679036294"><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036294"><span class="hs-identifier hs-var">rs'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-90"></span><span>            </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; Maybe (Rule v t)
+forall a. Set a -&gt; Maybe a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.lookupMin</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Maybe (Rule v t))
+-&gt; Set (Rule v t) -&gt; Maybe (Rule v t)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span>
+</span><span id="line-91"></span><span>                </span><span class="annot"><span class="annottext">(Rule v t -&gt; Bool) -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a. (a -&gt; Bool) -&gt; Set a -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.filter</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679036291"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036291"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span id="local-6989586621679036290"><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036290"><span class="hs-identifier hs-var">w</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Production v t -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">null</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036290"><span class="hs-identifier hs-var">w</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-operator hs-var">&amp;&amp;</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036291"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; v -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-operator hs-var">/=</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036296"><span class="hs-identifier hs-var">s'</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036294"><span class="hs-identifier hs-var">rs'</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-92"></span><span>              </span><span class="annot"><span class="annottext">Maybe (Rule v t)
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Nothing</span></a></span><span>          </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036294"><span class="hs-identifier hs-var">rs'</span></a></span><span>
+</span><span id="line-93"></span><span>              </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Just</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036286"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036286"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">v -&gt; Set v -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036297"><span class="hs-identifier hs-var">del</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036296"><span class="hs-identifier hs-var">s'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036286"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Set v -&gt; Set v
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-var">&lt;:</span></a></span><span> </span><span class="annot"><span class="annottext">Set v
+</span><a href="#local-6989586621679036295"><span class="hs-identifier hs-var">removed</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-94"></span><span>                                </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; (Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; Set (Rule v t)
+-&gt; Set (Rule v t)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Set (Rule v t)) -&gt; Set (Rule v t)
+forall (f :: * -&gt; *) a. (Foldable f, Ord a) =&gt; f (Set a) -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.unions</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Set (Rule v t)) -&gt; Set (Rule v t))
+-&gt; (Set (Rule v t) -&gt; Set (Set (Rule v t)))
+-&gt; Set (Rule v t)
+-&gt; Set (Rule v t)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">(Rule v t -&gt; Set (Rule v t))
+-&gt; Set (Rule v t) -&gt; Set (Set (Rule v t))
+forall b a. Ord b =&gt; (a -&gt; b) -&gt; Set a -&gt; Set b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.map</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v -&gt; Rule v t -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036283"><span class="hs-identifier hs-var">go</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036286"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036294"><span class="hs-identifier hs-var">rs'</span></a></span><span>
+</span><span id="line-95"></span><span>            </span><span class="hs-keyword">where</span><span>
+</span><span id="line-96"></span><span>                </span><span class="hs-comment">-- Generate the list of corresponding new rules based on @var@</span><span>
+</span><span id="line-97"></span><span>                </span><span class="hs-comment">-- being nullable.</span><span>
+</span><span id="line-98"></span><span>                </span><span class="annot"><a href="#local-6989586621679036283"><span class="hs-identifier hs-type">go</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-99"></span><span>                </span><span id="local-6989586621679036283"><span class="annot"><span class="annottext">go :: v -&gt; Rule v t -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036283"><span class="hs-identifier hs-var hs-var">go</span></a></span></span><span> </span><span id="local-6989586621679036282"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036282"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036281"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036281"><span class="hs-identifier hs-var">var'</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span id="local-6989586621679036280"><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036280"><span class="hs-identifier hs-var">w</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-100"></span><span>                    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036282"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; v -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-operator hs-var">==</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036281"><span class="hs-identifier hs-var">var'</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-operator hs-var">&amp;&amp;</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">null</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036280"><span class="hs-identifier hs-var">w</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-comment">-- Remove this rule.</span><span>
+</span><span id="line-101"></span><span>                    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">otherwise</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Production v t -&gt; Rule v t)
+-&gt; Set (Production v t) -&gt; Set (Rule v t)
+forall b a. Ord b =&gt; (a -&gt; b) -&gt; Set a -&gt; Set b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.map</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036281"><span class="hs-identifier hs-var">var'</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-102"></span><span>                                    </span><span class="hs-comment">-- Remove any added epsilon rule if it's</span><span>
+</span><span id="line-103"></span><span>                                    </span><span class="hs-comment">-- been removed before.</span><span>
+</span><span id="line-104"></span><span>                                </span><span class="annot"><span class="annottext">(Set (Production v t) -&gt; Set (Rule v t))
+-&gt; (Set (Production v t) -&gt; Set (Production v t))
+-&gt; Set (Production v t)
+-&gt; Set (Rule v t)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036281"><span class="hs-identifier hs-var">var'</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Set v -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">`elem`</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036282"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Set v -&gt; Set v
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-var">&lt;:</span></a></span><span> </span><span class="annot"><span class="annottext">Set v
+</span><a href="#local-6989586621679036295"><span class="hs-identifier hs-var">removed</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-105"></span><span>                                      </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Production v t -&gt; Set (Production v t) -&gt; Set (Production v t)
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.delete</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-106"></span><span>                                      </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Set (Production v t) -&gt; Set (Production v t)
+forall a. a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">id</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-107"></span><span>                                </span><span class="annot"><span class="annottext">(Set (Production v t) -&gt; Set (Rule v t))
+-&gt; Set (Production v t) -&gt; Set (Rule v t)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Set (Production v t)
+</span><a href="#local-6989586621679036276"><span class="hs-identifier hs-var">go'</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036282"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036280"><span class="hs-identifier hs-var">w</span></a></span><span>
+</span><span id="line-108"></span><span>                </span><span class="annot"><a href="#local-6989586621679036276"><span class="hs-identifier hs-type">go'</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Either</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Either</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-109"></span><span>                </span><span id="local-6989586621679036276"><span class="annot"><span class="annottext">go' :: v -&gt; Production v t -&gt; Set (Production v t)
+</span><a href="#local-6989586621679036276"><span class="hs-identifier hs-var hs-var">go'</span></a></span></span><span> </span><span class="annot"><span class="annottext">v
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">]</span><span>
+</span><span id="line-110"></span><span>                </span><span class="annot"><a href="#local-6989586621679036276"><span class="hs-identifier hs-var">go'</span></a></span><span> </span><span id="local-6989586621679036275"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036275"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Left</span></a></span><span> </span><span id="local-6989586621679036274"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036274"><span class="hs-identifier hs-var">v</span></a></span></span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-type">:</span></a></span><span id="local-6989586621679036273"><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036273"><span class="hs-identifier hs-var">w</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-111"></span><span>                    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036275"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; v -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-operator hs-var">==</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036274"><span class="hs-identifier hs-var">v</span></a></span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Set (Production v t)
+</span><a href="#local-6989586621679036272"><span class="hs-identifier hs-var">next</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Production v t)
+-&gt; Set (Production v t) -&gt; Set (Production v t)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">&lt;&gt;</span></a></span><span> </span><span class="annot"><span class="annottext">(Production v t -&gt; Production v t)
+-&gt; Set (Production v t) -&gt; Set (Production v t)
+forall b a. Ord b =&gt; (a -&gt; b) -&gt; Set a -&gt; Set b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.map</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v -&gt; Either v t
+forall a b. a -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Left</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036274"><span class="hs-identifier hs-var">v</span></a></span><span class="annot"><span class="annottext">Either v t -&gt; Production v t -&gt; Production v t
+forall a. a -&gt; [a] -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-var">:</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Set (Production v t)
+</span><a href="#local-6989586621679036272"><span class="hs-identifier hs-var">next</span></a></span><span>
+</span><span id="line-112"></span><span>                    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">otherwise</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Production v t -&gt; Production v t)
+-&gt; Set (Production v t) -&gt; Set (Production v t)
+forall b a. Ord b =&gt; (a -&gt; b) -&gt; Set a -&gt; Set b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.map</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v -&gt; Either v t
+forall a b. a -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Left</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036274"><span class="hs-identifier hs-var">v</span></a></span><span class="annot"><span class="annottext">Either v t -&gt; Production v t -&gt; Production v t
+forall a. a -&gt; [a] -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-var">:</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Set (Production v t)
+</span><a href="#local-6989586621679036272"><span class="hs-identifier hs-var">next</span></a></span><span>
+</span><span id="line-113"></span><span>                    </span><span class="hs-keyword">where</span><span> </span><span id="local-6989586621679036272"><span class="annot"><span class="annottext">next :: Set (Production v t)
+</span><a href="#local-6989586621679036272"><span class="hs-identifier hs-var hs-var">next</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Set (Production v t)
+</span><a href="#local-6989586621679036276"><span class="hs-identifier hs-var">go'</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036275"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036273"><span class="hs-identifier hs-var">w</span></a></span><span>
+</span><span id="line-114"></span><span>                </span><span class="annot"><a href="#local-6989586621679036276"><span class="hs-identifier hs-var">go'</span></a></span><span> </span><span id="local-6989586621679036271"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036271"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Right</span></a></span><span> </span><span id="local-6989586621679036270"><span class="annot"><span class="annottext">t
+</span><a href="#local-6989586621679036270"><span class="hs-identifier hs-var">t</span></a></span></span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-type">:</span></a></span><span id="local-6989586621679036269"><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036269"><span class="hs-identifier hs-var">w</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Production v t -&gt; Production v t)
+-&gt; Set (Production v t) -&gt; Set (Production v t)
+forall b a. Ord b =&gt; (a -&gt; b) -&gt; Set a -&gt; Set b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.map</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">t -&gt; Either v t
+forall a b. b -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Right</span></a></span><span> </span><span class="annot"><span class="annottext">t
+</span><a href="#local-6989586621679036270"><span class="hs-identifier hs-var">t</span></a></span><span class="annot"><span class="annottext">Either v t -&gt; Production v t -&gt; Production v t
+forall a. a -&gt; [a] -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-glyph hs-var">:</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Set (Production v t) -&gt; Set (Production v t))
+-&gt; Set (Production v t) -&gt; Set (Production v t)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Set (Production v t)
+</span><a href="#local-6989586621679036276"><span class="hs-identifier hs-var">go'</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036271"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">Production v t
+</span><a href="#local-6989586621679036269"><span class="hs-identifier hs-var">w</span></a></span><span>
+</span><span id="line-115"></span><span>
+</span><span id="line-116"></span><span>        </span><span class="hs-comment">-- UNIT step</span><span>
+</span><span id="line-117"></span><span>        </span><span class="hs-comment">-- Eliminates unit rules of form \(A \to B\).</span><span>
+</span><span id="line-118"></span><span>        </span><span class="annot"><a href="#local-6989586621679036268"><span class="hs-keyword hs-type">unit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-119"></span><span>        </span><span id="local-6989586621679036268"><span class="annot"><span class="annottext">unit :: Set (Rule v t) -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036268"><span class="hs-keyword hs-var hs-var">unit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; Set (Rule v t)
+forall a. a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">id</span></a></span><span>
+</span><span id="line-120"></span><span>
+</span><span id="line-121"></span><span>        </span><span class="hs-comment">-- TERM step</span><span>
+</span><span id="line-122"></span><span>        </span><span class="hs-comment">-- Converts given rule into one with no nonsolitary terminals.</span><span>
+</span><span id="line-123"></span><span>        </span><span class="annot"><a href="#local-6989586621679036267"><span class="hs-identifier hs-type">term</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier hs-type">State</span></a></span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/ghc-prim-0.6.1/src"><span class="hs-identifier hs-type">Int</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-124"></span><span>        </span><span id="local-6989586621679036267"><span class="annot"><span class="annottext">term :: Rule v t -&gt; State Int (Set (Rule v t))
+</span><a href="#local-6989586621679036267"><span class="hs-identifier hs-var hs-var">term</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; State Int (Set (Rule v t))
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">pure</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; State Int (Set (Rule v t)))
+-&gt; (Rule v t -&gt; Set (Rule v t))
+-&gt; Rule v t
+-&gt; State Int (Set (Rule v t))
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; Set (Rule v t)
+forall a. a -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.singleton</span></a></span><span>
+</span><span id="line-125"></span><span>
+</span><span id="line-126"></span><span>        </span><span class="hs-comment">-- Converts a CFG rule into a CNF rule. Errors impurely when the CFG</span><span>
+</span><span id="line-127"></span><span>        </span><span class="hs-comment">-- rule cannot be converted to a CNF rule since this is an internal</span><span>
+</span><span id="line-128"></span><span>        </span><span class="hs-comment">-- algorithmic error. TODO: We might consider using more fine-grained</span><span>
+</span><span id="line-129"></span><span>        </span><span class="hs-comment">-- types capturing the properties introduced by each step in the future.</span><span>
+</span><span id="line-130"></span><span>        </span><span class="annot"><a href="#local-6989586621679036265"><span class="hs-identifier hs-type">toCNF</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="CFGEq.CFG.html#Rule"><span class="hs-identifier hs-type">Rule</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-type">Set</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Either</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679036323"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679036322"><span class="hs-identifier hs-type">t</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-131"></span><span>        </span><span id="local-6989586621679036265"><span class="annot"><span class="annottext">toCNF :: Rule v t -&gt; (v, Set (CNFProduction v t))
+</span><a href="#local-6989586621679036265"><span class="hs-identifier hs-var hs-var">toCNF</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036264"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036264"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Left</span></a></span><span> </span><span id="local-6989586621679036263"><span class="annot"><a href="#local-6989586621679036263"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Left</span></a></span><span> </span><span id="local-6989586621679036262"><span class="annot"><a href="#local-6989586621679036262"><span class="hs-identifier hs-var">b</span></a></span></span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036264"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">(v, v) -&gt; CNFProduction v t
+forall a b. a -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Left</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036263"><span class="hs-identifier hs-var">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036262"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span><span class="hs-special">)</span><span>
+</span><span id="line-132"></span><span>        </span><span class="annot"><a href="#local-6989586621679036265"><span class="hs-identifier hs-var">toCNF</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679036261"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036261"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="annot"><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-type">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-type">Right</span></a></span><span> </span><span id="local-6989586621679036260"><span class="annot"><a href="#local-6989586621679036260"><span class="hs-identifier hs-var">c</span></a></span></span><span class="hs-special">]</span><span class="hs-special">)</span><span>        </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036261"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">t -&gt; CNFProduction v t
+forall a b. b -&gt; Either a b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">Right</span></a></span><span> </span><span class="annot"><span class="annottext">t
+</span><a href="#local-6989586621679036260"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span><span>
+</span><span id="line-133"></span><span>        </span><span class="annot"><a href="#local-6989586621679036265"><span class="hs-identifier hs-var">toCNF</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t
+</span><span class="hs-identifier">_</span></span><span>                          </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; (v, Set (CNFProduction v t))
+forall a. HasCallStack =&gt; String -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;toCNF internal error&quot;</span></span><span>
+</span><span id="line-134"></span><span>
+</span><span id="line-135"></span><span>        </span><span class="hs-comment">-- Putting them all together.</span><span>
+</span><span id="line-136"></span><span>        </span><span class="hs-special">(</span><span id="local-6989586621679036316"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036316"><span class="hs-identifier hs-var">newS</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679036317"><span class="annot"><span class="annottext">Map v (Set (CNFProduction v t))
+</span><a href="#local-6989586621679036317"><span class="hs-identifier hs-var">rules'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679036315"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679036315"><span class="hs-identifier hs-var">sEmpty</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((v, Map v (Set (CNFProduction v t)), Bool), Int)
+-&gt; (v, Map v (Set (CNFProduction v t)), Bool)
+forall a b. (a, b) -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">fst</span></a></span><span> </span><span class="annot"><span class="annottext">(((v, Map v (Set (CNFProduction v t)), Bool), Int)
+ -&gt; (v, Map v (Set (CNFProduction v t)), Bool))
+-&gt; (State Int (v, Map v (Set (CNFProduction v t)), Bool)
+    -&gt; ((v, Map v (Set (CNFProduction v t)), Bool), Int))
+-&gt; State Int (v, Map v (Set (CNFProduction v t)), Bool)
+-&gt; (v, Map v (Set (CNFProduction v t)), Bool)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">(State Int (v, Map v (Set (CNFProduction v t)), Bool)
+ -&gt; Int -&gt; ((v, Map v (Set (CNFProduction v t)), Bool), Int))
+-&gt; Int
+-&gt; State Int (v, Map v (Set (CNFProduction v t)), Bool)
+-&gt; ((v, Map v (Set (CNFProduction v t)), Bool), Int)
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">flip</span></a></span><span> </span><span class="annot"><span class="annottext">State Int (v, Map v (Set (CNFProduction v t)), Bool)
+-&gt; Int -&gt; ((v, Map v (Set (CNFProduction v t)), Bool), Int)
+forall s a. State s a -&gt; s -&gt; (a, s)
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/transformers-0.5.6.2/src"><span class="hs-identifier hs-var">runState</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="annottext">(State Int (v, Map v (Set (CNFProduction v t)), Bool)
+ -&gt; (v, Map v (Set (CNFProduction v t)), Bool))
+-&gt; State Int (v, Map v (Set (CNFProduction v t)), Bool)
+-&gt; (v, Map v (Set (CNFProduction v t)), Bool)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-137"></span><span>            </span><span class="hs-special">(</span><span id="local-6989586621679036257"><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036257"><span class="hs-identifier hs-var">s'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679036256"><span class="annot"><span class="annottext">Rule v t
+</span><a href="#local-6989586621679036256"><span class="hs-identifier hs-var">startRule</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">v -&gt; State Int (v, Rule v t)
+</span><a href="#local-6989586621679036314"><span class="hs-identifier hs-var">startStep</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036318"><span class="hs-identifier hs-var">s</span></a></span><span>
+</span><span id="line-138"></span><span>            </span><span id="local-6989586621679036255"><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036255"><span class="hs-identifier hs-var">binRules</span></a></span></span><span>        </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[Set (Rule v t)] -&gt; Set (Rule v t)
+forall (f :: * -&gt; *) a. (Foldable f, Ord a) =&gt; f (Set a) -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.unions</span></a></span><span> </span><span class="annot"><span class="annottext">([Set (Rule v t)] -&gt; Set (Rule v t))
+-&gt; StateT Int Identity [Set (Rule v t)]
+-&gt; State Int (Set (Rule v t))
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">&lt;$&gt;</span></a></span><span> </span><span class="annot"><span class="annottext">(Rule v t -&gt; State Int (Set (Rule v t)))
+-&gt; [Rule v t] -&gt; StateT Int Identity [Set (Rule v t)]
+forall (t :: * -&gt; *) (m :: * -&gt; *) a b.
+(Traversable t, Monad m) =&gt;
+(a -&gt; m b) -&gt; t a -&gt; m (t b)
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">mapM</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; State Int (Set (Rule v t))
+</span><a href="#local-6989586621679036308"><span class="hs-identifier hs-var">bin</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; [Rule v t]
+forall a. Set a -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.toList</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rule v t
+</span><a href="#local-6989586621679036256"><span class="hs-identifier hs-var">startRule</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="CFGEq.CNF.html#%3C%3A"><span class="hs-operator hs-var">&lt;:</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036319"><span class="hs-identifier hs-var">rs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-139"></span><span>            </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679036251"><span class="annot"><span class="annottext">delUnitRules :: Set (Rule v t)
+</span><a href="#local-6989586621679036251"><span class="hs-identifier hs-var hs-var">delUnitRules</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036268"><span class="hs-keyword hs-var">unit</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; (Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; Set (Rule v t)
+-&gt; Set (Rule v t)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Set v -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+</span><a href="#local-6989586621679036297"><span class="hs-identifier hs-var">del</span></a></span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036257"><span class="hs-identifier hs-var">s'</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Set (Rule v t))
+-&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036255"><span class="hs-identifier hs-var">binRules</span></a></span><span>
+</span><span id="line-140"></span><span>            </span><span id="local-6989586621679036250"><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036250"><span class="hs-identifier hs-var">termRules</span></a></span></span><span>       </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[Set (Rule v t)] -&gt; Set (Rule v t)
+forall (f :: * -&gt; *) a. (Foldable f, Ord a) =&gt; f (Set a) -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.unions</span></a></span><span> </span><span class="annot"><span class="annottext">([Set (Rule v t)] -&gt; Set (Rule v t))
+-&gt; StateT Int Identity [Set (Rule v t)]
+-&gt; State Int (Set (Rule v t))
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">&lt;$&gt;</span></a></span><span> </span><span class="annot"><span class="annottext">(Rule v t -&gt; State Int (Set (Rule v t)))
+-&gt; [Rule v t] -&gt; StateT Int Identity [Set (Rule v t)]
+forall (t :: * -&gt; *) (m :: * -&gt; *) a b.
+(Traversable t, Monad m) =&gt;
+(a -&gt; m b) -&gt; t a -&gt; m (t b)
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">mapM</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; State Int (Set (Rule v t))
+</span><a href="#local-6989586621679036267"><span class="hs-identifier hs-var">term</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; [Rule v t]
+forall a. Set a -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.toList</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036251"><span class="hs-identifier hs-var">delUnitRules</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-141"></span><span>            </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679036249"><span class="annot"><span class="annottext">sEmpty' :: Bool
+</span><a href="#local-6989586621679036249"><span class="hs-identifier hs-var hs-var">sEmpty'</span></a></span></span><span>      </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; Set (Rule v t) -&gt; Bool
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Bool
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.member</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036257"><span class="hs-identifier hs-var">s'</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036250"><span class="hs-identifier hs-var">termRules</span></a></span><span>
+</span><span id="line-142"></span><span>            </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679036247"><span class="annot"><span class="annottext">noEmptyRules :: Set (Rule v t)
+</span><a href="#local-6989586621679036247"><span class="hs-identifier hs-var hs-var">noEmptyRules</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; Set (Rule v t) -&gt; Set (Rule v t)
+forall a. Ord a =&gt; a -&gt; Set a -&gt; Set a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.delete</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036257"><span class="hs-identifier hs-var">s'</span></a></span><span> </span><span class="annot"><span class="annottext">v -&gt; Production v t -&gt; Rule v t
+forall v t. v -&gt; Production v t -&gt; Rule v t
+</span><a href="CFGEq.CFG.html#%3A-%3E"><span class="hs-operator hs-var">:-&gt;</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036250"><span class="hs-identifier hs-var">termRules</span></a></span><span>
+</span><span id="line-143"></span><span>            </span><span class="annot"><span class="annottext">(v, Map v (Set (CNFProduction v t)), Bool)
+-&gt; State Int (v, Map v (Set (CNFProduction v t)), Bool)
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">pure</span></a></span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679036257"><span class="hs-identifier hs-var">s'</span></a></span><span>
+</span><span id="line-144"></span><span>                 </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(Set (CNFProduction v t)
+ -&gt; Set (CNFProduction v t) -&gt; Set (CNFProduction v t))
+-&gt; [(v, Set (CNFProduction v t))]
+-&gt; Map v (Set (CNFProduction v t))
+forall k a. Ord k =&gt; (a -&gt; a -&gt; a) -&gt; [(k, a)] -&gt; Map k a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Map.fromListWith</span></a></span><span> </span><span class="annot"><span class="annottext">Set (CNFProduction v t)
+-&gt; Set (CNFProduction v t) -&gt; Set (CNFProduction v t)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">(&lt;&gt;)</span></a></span><span> </span><span class="annot"><span class="annottext">([(v, Set (CNFProduction v t))] -&gt; Map v (Set (CNFProduction v t)))
+-&gt; (Set (Rule v t) -&gt; [(v, Set (CNFProduction v t))])
+-&gt; Set (Rule v t)
+-&gt; Map v (Set (CNFProduction v t))
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">(Rule v t -&gt; (v, Set (CNFProduction v t)))
+-&gt; [Rule v t] -&gt; [(v, Set (CNFProduction v t))]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-identifier hs-var">map</span></a></span><span> </span><span class="annot"><span class="annottext">Rule v t -&gt; (v, Set (CNFProduction v t))
+</span><a href="#local-6989586621679036265"><span class="hs-identifier hs-var">toCNF</span></a></span><span> </span><span class="annot"><span class="annottext">([Rule v t] -&gt; [(v, Set (CNFProduction v t))])
+-&gt; (Set (Rule v t) -&gt; [Rule v t])
+-&gt; Set (Rule v t)
+-&gt; [(v, Set (CNFProduction v t))]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">.</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t) -&gt; [Rule v t]
+forall a. Set a -&gt; [a]
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/containers-0.6.2.1/src"><span class="hs-identifier hs-var">Set.toList</span></a></span><span> </span><span class="annot"><span class="annottext">(Set (Rule v t) -&gt; Map v (Set (CNFProduction v t)))
+-&gt; Set (Rule v t) -&gt; Map v (Set (CNFProduction v t))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><a href="../file:///nix/store/55ysfrn085k1lsya0c2msm6npi7x6ihh-ghc-8.10.4-doc/share/doc/ghc/html/libraries/base-4.14.1.0/src"><span class="hs-operator hs-var">$</span></a></span><span> </span><span class="annot"><span class="annottext">Set (Rule v t)
+</span><a href="#local-6989586621679036247"><span class="hs-identifier hs-var">noEmptyRules</span></a></span><span>
+</span><span id="line-145"></span><span>                 </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679036249"><span class="hs-identifier hs-var">sEmpty'</span></a></span><span>
+</span><span id="line-146"></span><span>                 </span><span class="hs-special">)</span><span>
+</span><span id="line-147"></span></pre></body></html>
