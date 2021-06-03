@@ -16,7 +16,6 @@
 
 module CFGEq.CFG where
 
-import           Data.List          (intercalate)
 import           Data.List.NonEmpty (NonEmpty (..))
 
 -- | @CFG v t@ is the type of context-free grammars with variables of type @v@
@@ -33,18 +32,7 @@ data Rule v t =
     -- the variable @S@. The string is a list of 'Either's, with 'Left's
     -- representing variables and 'Right's representing terminals.
     v :-> [Either v t]
-
-instance (Show v, Show t) => Show (Rule v t) where
-    show (var :-> [])    = show var <> " -> Epsilon"
-    show (var :-> terms) = show var <> " -> " <> sterms
-        where
-            -- Each element on the right is either displayed as a string if each
-            -- corresponds to a single character, or a comma-separated list
-            -- otherwise.
-            sterms = if all ((== 1) . length) sterms'
-                        then concat sterms'
-                        else intercalate ", " sterms'
-            sterms' = map (either show show) terms
+    deriving (Show, Eq, Ord)
 
 -- | Acts similarly to \(\mid\) in normal CFGs, adding a new rule to a
 -- 'NonEmpty' list of existing rules. For example, \(S \to AB \mid c\) would be
