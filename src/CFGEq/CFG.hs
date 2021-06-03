@@ -22,7 +22,7 @@ import           Data.List.NonEmpty (NonEmpty (..))
 -- | @CFG v t@ is the type of context-free grammars with variables of type @v@
 -- and terminals of type @t@. Each such grammar is a 4-tuple of the list of
 -- variables, list of terminals, list of 'Rule's and the start symbol.
-type CFG v t = ([v], [t], [Rule v t], t)
+type CFG v t = ([v], [t], [Rule v t], v)
 
 -- | @Rule v t@ is a CFG rule with variables of type @v@ and terminals of type
 -- @t@. Variables with more than one rule should have multiple @Rule@s, for
