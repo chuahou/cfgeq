@@ -116,12 +116,12 @@ compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
         -- UNIT step
         -- Eliminates unit rules of form \(A \to B\).
         unit :: Set (Rule v t) -> Set (Rule v t)
-        unit = undefined
+        unit = id
 
         -- TERM step
         -- Converts given rule into one with no nonsolitary terminals.
         term :: Rule v t -> State Int (Set (Rule v t))
-        term = undefined
+        term = pure . Set.singleton
 
         -- Converts a CFG rule into a CNF rule. Errors impurely when the CFG
         -- rule cannot be converted to a CNF rule since this is an internal
