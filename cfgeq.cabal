@@ -52,7 +52,7 @@ executable cfgeq
   default-extensions:
       LambdaCase
       TupleSections
-  ghc-options: -Wall -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -static
+  ghc-options: -Wall -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -static -threaded
   build-depends:
       base >=4.13 && <5
     , cfgeq
