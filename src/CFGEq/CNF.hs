@@ -31,7 +31,7 @@ import           Data.Maybe          (fromMaybe, mapMaybe)
 import           Data.Set            (Set)
 import qualified Data.Set            as Set
 
-import           CFGEq.CFG
+import           CFGEq.CFG           (CFG (..), Rule (..))
 
 -- | @CNF v t@ is the type of Chomsky normal form grammars with variables of
 -- type @v@ and terminals of type @t@.
