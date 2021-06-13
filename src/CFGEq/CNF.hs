@@ -22,9 +22,11 @@ module CFGEq.CNF ( CNF (..)
                  , compile
                  ) where
 
+import           Control.Monad       (forM)
 import           Control.Monad.State (State, get, put, runState)
 import           Data.Map            (Map)
 import qualified Data.Map            as Map
+import           Data.Maybe          (mapMaybe)
 import           Data.Set            (Set)
 import qualified Data.Set            as Set
 
@@ -141,8 +143,34 @@ compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
 
         -- TERM step
         -- Converts given rule into one with no nonsolitary terminals.
-        term :: Rule v t -> State Int (Set (Rule v t))
-        term = pure . Set.singleton
+        term :: Set (Rule v t) -> State Int (Set (Rule v t))
+        term s' = termVars >>= \termVars' -> pure $ Set.map (go termVars') s'
+
+                    -- New rules corresponding to @termVars'@.
+                    `Set.union` Set.map (\(t, v) -> v :-> [Right t])
+                                    (Set.fromList . Map.toList $ termVars')
+
+            where
+                -- Extract list of unique terminals.
+                terminals :: [t]
+                terminals = Set.toList . Set.unions . Set.map go' $ s'
+                    where
+                        go' (_ :-> w) = Set.fromList $
+                            mapMaybe (either (const Nothing) Just) w
+
+                -- Assign each terminal to a fresh variable.
+                termVars :: State Int (Map t v)
+                termVars = fmap Map.fromList . forM terminals $ (\t -> do
+                    gen <- get
+                    put . succ $ gen
+                    pure (t, mkFresh gen))
+
+                -- Replace all non-unit occurrences of terminals with the fresh
+                -- variable.
+                go :: Map t v -> Rule v t -> Rule v t
+                go m (v :-> p@[_, _]) = v :-> map go' p
+                    where go' = either Left (Left . (m Map.!))
+                go _ r = r
 
         -- Converts a CFG rule into a CNF rule. Errors impurely when the CFG
         -- rule cannot be converted to a CNF rule since this is an internal
@@ -158,7 +186,7 @@ compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
             (s', startRule) <- startStep s
             binRules        <- Set.unions <$> mapM bin (Set.toList (startRule <: rs))
             let delUnitRules = unit [] . del s' [] $ binRules
-            termRules       <- Set.unions <$> mapM term (Set.toList delUnitRules)
+            termRules       <- term delUnitRules
             let sEmpty'      = Set.member (s' :-> []) termRules
             let noEmptyRules = Set.delete (s' :-> []) termRules
             pure ( s'
