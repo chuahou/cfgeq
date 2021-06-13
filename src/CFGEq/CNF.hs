@@ -114,9 +114,30 @@ compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
                 go' var (Right t:w) = Set.map (Right t:) $ go' var w
 
         -- UNIT step
-        -- Eliminates unit rules of form \(A \to B\).
-        unit :: Set (Rule v t) -> Set (Rule v t)
-        unit = id
+        -- Eliminates unit rules of form \(A \to B\), given a set of already
+        -- removed unit rules.
+        unit :: Set (Rule v t) -> Set (Rule v t) -> Set (Rule v t)
+        unit removed s' =
+            case Set.lookupMin $
+                Set.filter (\(_ :-> w) -> case w of
+                                            [Left _] -> True
+                                            _        -> False) s' of
+                Nothing                  -> s'
+                Just r@(v :-> [Left v']) -> unit (r <: removed)
+                                          . Set.unions . Set.map (go v v') $ s'
+                _                        -> error "Unreachable 'unit'"
+            where
+                -- Performs relevant changes for unit rule \(v \to v'\) on rule
+                -- @r@. Removes \(v \to v'\) and replaces all \(v' \to w\) with
+                -- both \(v \to w\) and \(v' \to w\).
+                go :: v -> v -> Rule v t -> Set (Rule v t)
+                go v v' r@(u :-> w)
+                    -- Remove the current rule.
+                    | v == u && w == [Left v'] = []
+                    -- Don't add a rule that's already removed.
+                    | v' == u && not (Set.member (v :-> w) removed)
+                                               = [v :-> w, r]
+                    | otherwise                = [r]
 
         -- TERM step
         -- Converts given rule into one with no nonsolitary terminals.
@@ -136,7 +157,7 @@ compile mkFresh (CFG rs s) = CNF rules' newS sEmpty
         (newS, rules', sEmpty) = fst . flip runState 0 $ do
             (s', startRule) <- startStep s
             binRules        <- Set.unions <$> mapM bin (Set.toList (startRule <: rs))
-            let delUnitRules = unit . del s' [] $ binRules
+            let delUnitRules = unit [] . del s' [] $ binRules
             termRules       <- Set.unions <$> mapM term (Set.toList delUnitRules)
             let sEmpty'      = Set.member (s' :-> []) termRules
             let noEmptyRules = Set.delete (s' :-> []) termRules
