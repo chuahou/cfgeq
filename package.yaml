@@ -22,10 +22,17 @@ default-extensions:
 dependencies:
     - base        >= 4.13 && < 5
     - containers ^>= 0.6.2.1
+    - parsec     ^>= 3.1.14.0
     - mtl        ^>= 2.2.2
 
 library:
     source-dirs: src
+
+executable:
+    main:         Main.hs
+    source-dirs:  exe
+    dependencies: cfgeq
+    ghc-options:  -threaded
 
 extra-doc-files:
     - README.md
