@@ -1,10 +1,8 @@
-name: "build artifacts"
+name: "Draft release"
 on:
-    workflow_dispatch:
-        inputs:
-            label:
-                description: "Label to give artifacts"
-                required:    true
+    push:
+        tags: v*
+
 jobs:
     linux:
         runs-on: ubuntu-latest
@@ -34,7 +32,7 @@ jobs:
             mkdir -p artifacts
             cabal install
             cp $HOME/.cabal/bin/cfgeq \
-                artifacts/cfgeq-${{ github.event.inputs.label }}-${GITHUB_SHA}-linux
+                artifacts/cfgeq-$(echo ${{ github.ref }} | sed -n 's/.*\(v\([0-9]\.\)\{3\}[0-9]\)/\1/p')-${GITHUB_SHA}-linux
         - uses: actions/upload-artifact@v2
           with:
             name: artifacts-linux
@@ -53,8 +51,31 @@ jobs:
           run: |
             mkdir artifacts
             cabal install
-            cp %APPDATA%\cabal\bin\cfgeq.exe artifacts\cfgeq-${{ github.event.inputs.label }}-%GITHUB_SHA%-windows.exe
+            cp %APPDATA%\cabal\bin\cfgeq.exe artifacts\cfgeq.exe
+        - name:  Rename
+          shell: bash
+          run: |
+            mv artifacts/cfgeq.exe \
+                artifacts/cfgeq-$(echo ${{ github.ref }} | sed -n 's/.*\(v\([0-9]\.\)\{3\}[0-9]\)/\1/p')-${{ github.sha }}-windows.exe
         - uses: actions/upload-artifact@v2
           with:
             name: artifacts-windows
             path: artifacts\cfgeq-*
+
+    release:
+        runs-on: ubuntu-latest
+        needs:   [linux, windows]
+        steps:
+        - uses: actions/checkout@v2.3.4
+        - name: Parse changelog
+          run: |
+            TAG=$(echo ${{ github.ref }} | sed -n 's/.*\(\([0-9]\.\)\{3\}[0-9]\)/\1/p')
+            sed "/^## ${TAG}/,/^##/!d; //d; /^$/d" CHANGELOG.md > CHANGES.md
+        - uses: actions/download-artifact@v2
+        - name: Draft release
+          uses: ncipollo/release-action@v1
+          with:
+            draft:     true
+            artifacts: "artifacts-linux/cfgeq-*,artifacts-windows/cfgeq-*.exe"
+            bodyFile:  CHANGES.md
+            token:     ${{ secrets.GITHUB_TOKEN }}
