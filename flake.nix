@@ -1,5 +1,11 @@
 {
-  inputs.nixpkgs.url  = "nixpkgs/nixos-21.05";
+  inputs = {
+    nixpkgs.url  = "nixpkgs/nixos-21.05";
+    flake-compat = {
+      url   = "github:edolstra/flake-compat";
+      flake = false;
+    };
+  };
 
   outputs = inputs@{ self, nixpkgs, ... }:
   let
